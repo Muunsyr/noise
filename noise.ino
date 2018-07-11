@@ -1,12 +1,14 @@
-const int sampleWindow = 20; // Sample window width in mS (50 mS = 20Hz)
+const int sampleWindow = 10; // Sample window width in mS (50 mS = 20Hz)
 const int SIZE = 10;
 unsigned int sample;
 int dig1; // low order
 int dig2; // high order
-bool dig = false;
+bool rightDig = false;
 int index;
 long sum;
-int vals[SIZE];
+unsigned int vals[SIZE];
+unsigned int peak;
+unsigned long loopTime;
 
 void setup() {
   pinMode(8, OUTPUT);
@@ -14,6 +16,7 @@ void setup() {
   Serial.begin(115200);
   index = 0;
   sum = 0;
+  loopTime = millis();
 } 
  
 void loop() 
@@ -21,19 +24,27 @@ void loop()
   sum -= vals[index];
   vals[index] = readPeakToPeak();
   sum += vals[index];
-  index++;
+  if (vals[index] > peak) {
+    peak = vals[index];
+  }
+  index++;  
   if (index == SIZE) {
     index = 0;
-    calcDigits(sum/SIZE);
-    Serial.println(sum/SIZE);
   }
 
-  display(dig);
-  dig = !dig;
+  if (millis() > loopTime + 500) {
+    calcDigits(peak);
+    Serial.println(peak);
+    peak = 0;
+    loopTime = millis();
+  }
+  display(rightDig);
+  rightDig = !rightDig;
 }
 
 void display(bool lowDig) {
   byte portd;
+  bool blank = false;
   int pin8 = HIGH;
   if (lowDig) {
     pin8 = LOW;
@@ -41,13 +52,22 @@ void display(bool lowDig) {
   }
   else {
     portd = dig2 << 3;
+    if (dig2 == 0) {
+      blank = true;
+    }
+  }
+  
+  if (blank) {
+    portd = portd & B11111011;
+  }
+  else {
+    portd = portd | B00000100;
   }
   digitalWrite(8, pin8);
-  portd = portd | B00000100;
   PORTD = (PIND & B00000011) | (portd & B11111100);
 }
 
-void calcDigits(int peakToPeak) {
+void calcDigits(unsigned int peakToPeak) {
   if (peakToPeak > 99) {
     dig1 = 9;
     dig2 = 9;
